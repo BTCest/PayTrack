@@ -217,6 +217,7 @@ function renderAuth() {
   app.innerHTML = `
     <div class="auth-wrap">
       <div class="auth-card">
+        <div class="auth-mark">฿</div>
         <h1>ตัวจัดการบิลที่ต้องจ่าย</h1>
         <p class="sub">${isLogin ? "เข้าสู่ระบบเพื่อดูรายการบิลของคุณ" : "สมัครสมาชิกใหม่"}</p>
         ${state.authError ? `<div class="error-msg">${escapeHtml(state.authError)}</div>` : ""}
@@ -238,6 +239,7 @@ function renderAuth() {
           <button id="switch-mode">${isLogin ? "สมัครสมาชิก" : "เข้าสู่ระบบ"}</button>
         </div>
       </div>
+      <p class="auth-footer">พัฒนาด้วย JavaScript (Hono) · ทำงานบน Cloudflare Workers + D1</p>
     </div>
   `;
   document.getElementById("auth-form").addEventListener("submit", handleAuthSubmit);

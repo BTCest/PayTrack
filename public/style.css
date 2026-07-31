@@ -84,6 +84,7 @@ body {
 .auth-wrap {
   min-height: 100vh;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   padding: 24px;
@@ -91,6 +92,14 @@ body {
     radial-gradient(560px circle at 12% 8%, rgba(var(--primary-rgb), 0.16), transparent 60%),
     radial-gradient(560px circle at 88% 92%, rgba(var(--primary-rgb), 0.12), transparent 60%),
     var(--bg);
+}
+
+.auth-footer {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  margin-top: 20px;
+  max-width: 400px;
 }
 
 .auth-card {
