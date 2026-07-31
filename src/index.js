@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { getCookie, setCookie, deleteCookie } from "hono/cookie";
-import { hashPassword, verifyPassword, createSession, getSessionUser, deleteSession } from "../_lib/auth.js";
+import { hashPassword, verifyPassword, createSession, getSessionUser, deleteSession } from "./lib/auth.js";
 
 const COOKIE_NAME = "session";
 const PAYMENT_OPTIONS = ["full", "min", "custom"];
@@ -314,4 +314,4 @@ app.get("/history", async (c) => {
 
 app.notFound((c) => c.json({ error: "not found" }, 404));
 
-export const onRequest = (context) => app.fetch(context.request, context.env, context);
+export default app;

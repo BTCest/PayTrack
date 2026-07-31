@@ -1,5 +1,4 @@
 // Utilities สำหรับ hash รหัสผ่านและจัดการ session
-// อยู่ใต้โฟลเดอร์ที่ขึ้นต้นด้วย "_" เพื่อไม่ให้ Cloudflare Pages Functions ตีความเป็น route
 
 const PBKDF2_ITERATIONS = 100000;
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 วัน

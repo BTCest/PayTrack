@@ -2,8 +2,15 @@
   "name": "paytrack",
   "private": true,
   "version": "1.0.0",
-  "description": "ระบบติดตามรายการบิลที่ต้องจ่าย (Cloudflare Pages + D1)",
+  "description": "ระบบติดตามรายการบิลที่ต้องจ่าย (Cloudflare Workers + Static Assets + D1)",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
   "dependencies": {
     "hono": "^4.6.14"
+  },
+  "devDependencies": {
+    "wrangler": "^3.90.0"
   }
 }

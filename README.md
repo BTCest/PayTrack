@@ -2,23 +2,23 @@
 
 เว็บแอปสำหรับติดตามรายการบิลที่ต้องจ่าย: กำหนดวันครบชำระ ยอดเต็ม ยอดขั้นต่ำ เลือกวิธีจ่าย (เต็ม/ขั้นต่ำ/กำหนดเอง) และสถานะจ่ายแล้วหรือยัง พร้อมประวัติการจ่ายย้อนหลัง
 
-**สแตค:** Cloudflare Pages (static + Functions) + D1 (SQLite) + [Hono](https://hono.dev) สำหรับ API + ล็อกอินแบบ email/password (session cookie, รหัสผ่านถูก hash ด้วย PBKDF2 ไม่มีการเก็บ plaintext)
+**สแตค:** Cloudflare Workers + Static Assets + D1 (SQLite) + [Hono](https://hono.dev) สำหรับ API + ล็อกอินแบบ email/password (session cookie, รหัสผ่านถูก hash ด้วย PBKDF2 ไม่มีการเก็บ plaintext)
 
-เครื่องนี้ยังไม่ได้ติดตั้ง Node.js/npm ดังนั้นขั้นตอนด้านล่างเน้นการ deploy ผ่าน **GitHub + Cloudflare Pages dashboard** ซึ่งไม่ต้องใช้ Node ในเครื่องเลย (Cloudflare จะ build ให้บนคลาวด์)
+เครื่องนี้ยังไม่ได้ติดตั้ง Node.js/npm ดังนั้นขั้นตอนด้านล่างเน้นการ deploy ผ่าน **GitHub + Cloudflare dashboard** ซึ่งไม่ต้องใช้ Node ในเครื่องเลย (Cloudflare จะ build ให้บนคลาวด์)
 
 ## โครงสร้างโปรเจกต์
 
 ```
 paytrack/
-├── public/              # ไฟล์หน้าเว็บ (static)
+├── public/              # ไฟล์หน้าเว็บ (static, serve ผ่าน [assets])
 │   ├── index.html
 │   ├── style.css
 │   └── app.js
-├── functions/
-│   ├── api/[[route]].js # API ทั้งหมด (Hono, catch-all ที่ /api/*)
-│   └── _lib/auth.js     # ฟังก์ชัน hash รหัสผ่าน + session
+├── src/
+│   ├── index.js          # Worker entry — API ทั้งหมด (Hono, ที่ /api/*)
+│   └── lib/auth.js        # ฟังก์ชัน hash รหัสผ่าน + session
 ├── schema.sql            # สคีมาฐานข้อมูล D1
-├── wrangler.toml          # ค่าคอนฟิกสำหรับ wrangler CLI (ถ้ามี Node ในอนาคต)
+├── wrangler.toml          # ค่าคอนฟิกสำหรับ wrangler CLI (main + [assets] + D1 binding)
 └── package.json
 ```
 
@@ -46,25 +46,24 @@ git push -u origin main
 4. คัดลอกเนื้อหาทั้งหมดจากไฟล์ `schema.sql` ในโปรเจกต์นี้ วางแล้วกด **Execute** เพื่อสร้างตาราง (`users`, `sessions`, `bills`, `payment_history`)
 5. จดค่า **Database ID** ไว้ (จะใช้ตอนผูก binding ในขั้นตอนที่ 4)
 
-## ขั้นตอนที่ 3 — สร้าง Pages project จาก GitHub repo
+## ขั้นตอนที่ 3 — สร้าง Workers project จาก GitHub repo
 
-1. ใน dash.cloudflare.com → **Workers & Pages → Create → Pages → Connect to Git**
+1. ใน dash.cloudflare.com → **Compute (Workers) → Workers & Pages → Create → Import a repository** (หรือ **Connect to Git** ใต้ Workers ไม่ใช่ Pages)
 2. เลือก repo `paytrack` ที่ push ไปแล้ว
-3. ตั้งค่า build:
-   - **Framework preset:** None
-   - **Build command:** ปล่อยว่าง (ไม่ต้อง build)
-   - **Build output directory:** `public`
+3. Cloudflare จะอ่านค่าจาก `wrangler.toml` เอง (`main = "src/index.js"`, `[assets] directory = "public"`) ไม่ต้องตั้ง build command เพิ่ม — deploy command เริ่มต้นคือ `npx wrangler deploy`
 4. กด **Save and Deploy**
 
-## ขั้นตอนที่ 4 — ผูก D1 database เข้ากับ Pages project
+> ถ้าโปรเจกต์นี้เคย deploy fail ด้วย error `Missing entry-point to Worker script or to assets directory` แปลว่าตอนสร้างยังไม่มี `main`/`[assets]` ใน `wrangler.toml` — แก้แล้ว push ใหม่ แล้วกด **Retry deployment** ได้เลย
 
-1. ไปที่ Pages project ที่เพิ่งสร้าง → แท็บ **Settings → Functions → D1 database bindings**
-2. กด **Add binding**
+## ขั้นตอนที่ 4 — ผูก D1 database เข้ากับ Workers project
+
+1. ไปที่ Workers project ที่เพิ่งสร้าง → แท็บ **Settings → Bindings**
+2. กด **Add → D1 database**
    - **Variable name:** `DB` (ต้องตรงกับที่โค้ดใช้ `c.env.DB` เป๊ะๆ)
    - **D1 database:** เลือก `paytrack-db`
-3. กด **Save** แล้ว **Redeploy** ล่าสุดอีกครั้ง (การเพิ่ม binding จะมีผลกับ deployment ใหม่เท่านั้น)
+3. กด **Save** แล้ว **Retry deployment** ล่าสุดอีกครั้ง (การเพิ่ม binding จะมีผลกับ deployment ใหม่เท่านั้น)
 
-หลังจากนี้เว็บของคุณจะพร้อมใช้งานที่โดเมน `*.pages.dev` ที่ Cloudflare ให้มา (หรือผูกโดเมนของคุณเองได้ในแท็บ Custom domains)
+หลังจากนี้เว็บของคุณจะพร้อมใช้งานที่โดเมน `*.workers.dev` ที่ Cloudflare ให้มา (หรือผูกโดเมนของคุณเองได้ในแท็บ Domains & Routes)
 
 ## การใช้งาน
 
@@ -80,7 +79,7 @@ git push -u origin main
 ```bash
 npm install
 npx wrangler d1 execute paytrack-db --local --file=./schema.sql
-npx wrangler pages dev public --d1 DB=paytrack-db
+npm run dev
 ```
 
-จากนั้นแก้ `database_id` ใน `wrangler.toml` ให้ตรงกับ D1 database ID จริงของคุณ ก่อน deploy ผ่าน CLI ด้วย `npx wrangler pages deploy public`
+จากนั้นแก้ `database_id` ใน `wrangler.toml` ให้ตรงกับ D1 database ID จริงของคุณ ก่อน deploy ผ่าน CLI ด้วย `npm run deploy`
