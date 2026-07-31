@@ -1,5 +1,5 @@
 {
-  "name": "bill-tracker",
+  "name": "paytrack",
   "private": true,
   "version": "1.0.0",
   "description": "ระบบติดตามรายการบิลที่ต้องจ่าย (Cloudflare Pages + D1)",
