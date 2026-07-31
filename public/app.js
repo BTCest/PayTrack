@@ -267,7 +267,7 @@ function billCardHtml(bill) {
   const isDone = bill.recurrence === "once" && bill.is_paid;
   const option = bill.payment_option;
   return `
-    <div class="bill-card ${isDone ? "paid" : ""}" data-bill-id="${bill.id}">
+    <div class="bill-card status-${status.key} ${isDone ? "paid" : ""}" data-bill-id="${bill.id}">
       <div class="bill-top">
         <div>
           <div class="bill-name">${escapeHtml(bill.name)}</div>
@@ -331,19 +331,19 @@ function renderDashboard() {
     </div>
     <div class="container">
       <div class="summary-row">
-        <div class="summary-card">
+        <div class="summary-card accent-neutral">
           <div class="label">รายการค้างจ่าย</div>
           <div class="value">${summary.count}</div>
         </div>
-        <div class="summary-card">
+        <div class="summary-card accent-danger">
           <div class="label">เลยกำหนดแล้ว</div>
           <div class="value" style="color:var(--danger)">${summary.overdue}</div>
         </div>
-        <div class="summary-card">
+        <div class="summary-card accent-warn">
           <div class="label">ใกล้ครบกำหนด (≤5 วัน)</div>
           <div class="value" style="color:var(--warn)">${summary.soon}</div>
         </div>
-        <div class="summary-card">
+        <div class="summary-card accent-primary">
           <div class="label">ยอดรวมที่ต้องจ่าย (ตามที่เลือก)</div>
           <div class="value">${fmtMoney(summary.totalDue)}</div>
         </div>
@@ -361,7 +361,7 @@ function renderDashboard() {
     ${state.formModal ? formModalHtml() : ""}
     ${state.historyModal ? historyModalHtml() : ""}
     ${state.allHistory ? allHistoryModalHtml() : ""}
-    ${state.toast ? `<div class="modal-backdrop" style="background:transparent;pointer-events:none;align-items:flex-end;"><div class="btn btn-primary" style="pointer-events:none;">${escapeHtml(state.toast)}</div></div>` : ""}
+    ${state.toast ? `<div class="toast">${escapeHtml(state.toast)}</div>` : ""}
   `;
 
   document.getElementById("btn-logout").addEventListener("click", handleLogout);
