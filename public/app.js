@@ -197,6 +197,7 @@ async function selectPaymentOption(billId, option, customAmount) {
     });
     await loadBills();
     render();
+    showToast("บันทึกวิธีจ่ายแล้ว กดปุ่ม \"ทำเครื่องหมายว่าจ่ายแล้ว\" เพื่อยืนยันการจ่ายจริง");
   } catch (err) {
     showError(err.message);
   }
