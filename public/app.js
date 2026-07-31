@@ -11,6 +11,7 @@ const state = {
   allHistory: null, // array or null
   toast: null,
   filter: null, // null | 'unpaid' | 'overdue' | 'soon'
+  expanded: new Set(), // bill ids currently showing full detail
 };
 
 // ---------- API helper ----------
@@ -267,16 +268,21 @@ function billCardHtml(bill) {
   const status = billStatus(bill);
   const isDone = bill.recurrence === "once" && bill.is_paid;
   const option = bill.payment_option;
+  const isExpanded = state.expanded.has(bill.id);
   return `
-    <div class="bill-card status-${status.key} ${isDone ? "paid" : ""}" data-bill-id="${bill.id}">
-      <div class="bill-top">
+    <div class="bill-card status-${status.key} ${isDone ? "paid" : ""} ${isExpanded ? "expanded" : "compact"}" data-bill-id="${bill.id}">
+      <div class="bill-top" data-action="toggle-expand">
         <div>
           <div class="bill-name">${escapeHtml(bill.name)}</div>
-          <div class="bill-due">ครบกำหนด ${fmtDate(bill.next_due_date)} · ${bill.recurrence === "monthly" ? "รายเดือน" : "ครั้งเดียว"}</div>
+          <div class="bill-due">ครบกำหนด ${fmtDate(bill.next_due_date)} · ${bill.recurrence === "monthly" ? "รายเดือน" : "ครั้งเดียว"}${!isExpanded ? ` · ${fmtMoney(bill.full_amount)}` : ""}</div>
         </div>
-        <span class="badge badge-${status.key}">${status.label}</span>
+        <div class="bill-top-right">
+          <span class="badge badge-${status.key}">${status.label}</span>
+          <span class="chevron">›</span>
+        </div>
       </div>
 
+      ${isExpanded ? `
       <div class="amounts">
         <div class="amount-block">
           <div class="label">ยอดเต็ม</div>
@@ -308,6 +314,7 @@ function billCardHtml(bill) {
           <button class="btn btn-danger btn-sm" data-action="delete">ลบ</button>
         </div>
       </div>
+      ` : ""}
     </div>
   `;
 }
@@ -421,6 +428,12 @@ function renderDashboard() {
     const billId = card.dataset.billId;
     const bill = state.bills.find((b) => b.id === billId);
 
+    card.querySelector('[data-action="toggle-expand"]').addEventListener("click", () => {
+      if (state.expanded.has(billId)) state.expanded.delete(billId);
+      else state.expanded.add(billId);
+      render();
+    });
+
     card.querySelectorAll('[data-action="select-option"]').forEach((btn) => {
       btn.addEventListener("click", () => {
         const option = btn.dataset.option;
@@ -449,13 +462,20 @@ function renderDashboard() {
     const payBtn = card.querySelector('[data-action="pay"]');
     if (payBtn) payBtn.addEventListener("click", () => markPaid(billId));
 
-    card.querySelector('[data-action="undo"]').addEventListener("click", () => undoPaid(billId));
-    card.querySelector('[data-action="history"]').addEventListener("click", () => openHistory(bill));
-    card.querySelector('[data-action="edit"]').addEventListener("click", () => {
+    const undoBtn = card.querySelector('[data-action="undo"]');
+    if (undoBtn) undoBtn.addEventListener("click", () => undoPaid(billId));
+
+    const historyBtn = card.querySelector('[data-action="history"]');
+    if (historyBtn) historyBtn.addEventListener("click", () => openHistory(bill));
+
+    const editBtn = card.querySelector('[data-action="edit"]');
+    if (editBtn) editBtn.addEventListener("click", () => {
       state.formModal = { mode: "edit", bill };
       render();
     });
-    card.querySelector('[data-action="delete"]').addEventListener("click", () => deleteBill(billId));
+
+    const deleteBtn = card.querySelector('[data-action="delete"]');
+    if (deleteBtn) deleteBtn.addEventListener("click", () => deleteBill(billId));
   });
 
   bindModalCloseHandlers();

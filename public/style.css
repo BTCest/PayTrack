@@ -344,13 +344,34 @@ button { cursor: pointer; font-family: inherit; }
 .bill-card.paid { opacity: 0.65; }
 .bill-card.paid:hover { transform: none; box-shadow: var(--shadow); }
 
+.bill-card.compact { padding-top: 14px; padding-bottom: 14px; }
+
 .bill-top {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
   gap: 12px;
   margin-bottom: 14px;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  margin-left: -6px;
+  margin-right: -6px;
+  padding: 4px 6px;
+  transition: background 0.12s ease;
 }
+.bill-top:hover { background: var(--surface-alt); }
+.bill-card.compact .bill-top { margin-bottom: 0; }
+
+.bill-top-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+
+.chevron {
+  color: var(--text-muted);
+  font-size: 1.1rem;
+  line-height: 1;
+  transform: rotate(90deg);
+  transition: transform 0.15s ease;
+}
+.bill-card.compact .chevron { transform: rotate(0deg); }
 
 .bill-name { font-weight: 700; font-size: 1.04rem; letter-spacing: -0.01em; }
 .bill-due { color: var(--text-muted); font-size: 0.82rem; margin-top: 3px; }
