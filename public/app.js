@@ -355,7 +355,14 @@ function renderDashboard() {
       </div>
 
       <div class="bill-list">
-        ${sorted.length ? sorted.map(billCardHtml).join("") : `<div class="empty-state">ยังไม่มีรายการบิล กด "+ เพิ่มบิล" เพื่อเริ่มต้น</div>`}
+        ${sorted.length ? sorted.map(billCardHtml).join("") : `
+        <div class="empty-state">
+          <div class="empty-icon">฿</div>
+          <h3>ยังไม่มีรายการบิล</h3>
+          <p>เริ่มติดตามบิลที่ต้องจ่าย เพื่อไม่พลาดวันครบกำหนดอีกต่อไป</p>
+          <button class="btn btn-primary" id="btn-add-bill-empty">+ เพิ่มบิลแรกของคุณ</button>
+        </div>
+        `}
       </div>
     </div>
     ${state.formModal ? formModalHtml() : ""}
@@ -369,6 +376,13 @@ function renderDashboard() {
     state.formModal = { mode: "create" };
     render();
   });
+  const btnAddBillEmpty = document.getElementById("btn-add-bill-empty");
+  if (btnAddBillEmpty) {
+    btnAddBillEmpty.addEventListener("click", () => {
+      state.formModal = { mode: "create" };
+      render();
+    });
+  }
   document.getElementById("btn-history-all").addEventListener("click", openAllHistory);
 
   document.querySelectorAll(".bill-card").forEach((card) => {

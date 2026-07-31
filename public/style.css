@@ -51,7 +51,11 @@
 body {
   margin: 0;
   font-family: "Inter", "Noto Sans Thai", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  background: var(--bg);
+  background:
+    radial-gradient(680px circle at 8% 0%, rgba(var(--primary-rgb), 0.08), transparent 55%),
+    radial-gradient(680px circle at 100% 30%, rgba(var(--primary-rgb), 0.06), transparent 55%),
+    var(--bg);
+  background-attachment: fixed;
   color: var(--text);
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
@@ -422,13 +426,46 @@ button { cursor: pointer; font-family: inherit; }
 .bill-actions .right { display: flex; gap: 8px; }
 
 .empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   text-align: center;
-  padding: 56px 16px;
+  padding: 64px 24px;
   color: var(--text-muted);
   border: 1.5px dashed var(--border);
   border-radius: var(--radius);
   font-size: 0.92rem;
+  background: var(--surface);
 }
+
+.empty-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--primary), #8b6ff0);
+  color: #fff;
+  font-size: 1.5rem;
+  font-weight: 800;
+  margin-bottom: 18px;
+  box-shadow: 0 8px 22px rgba(var(--primary-rgb), 0.32);
+}
+
+.empty-state h3 {
+  margin: 0 0 6px;
+  font-size: 1.08rem;
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
+
+.empty-state p {
+  margin: 0 0 22px;
+  max-width: 320px;
+}
+
+.empty-state .btn-primary { width: auto; padding: 10px 22px; }
 
 /* ---------- Modal ---------- */
 
