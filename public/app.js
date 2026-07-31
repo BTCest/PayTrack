@@ -43,6 +43,42 @@ function showToast(message) {
   }, 2500);
 }
 
+// ---------- Alerts (SweetAlert2, themed) ----------
+
+function themedSwal(options) {
+  const isDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+  return Swal.fire({
+    background: isDark ? "#1a1c26" : "#ffffff",
+    color: isDark ? "#eef0f8" : "#1a1c29",
+    confirmButtonColor: "#5b5fef",
+    cancelButtonColor: isDark ? "#2c2f3d" : "#e4e6f0",
+    buttonsStyling: true,
+    ...options,
+  });
+}
+
+function showError(message) {
+  return themedSwal({
+    icon: "error",
+    title: "เกิดข้อผิดพลาด",
+    text: message,
+    confirmButtonText: "ตกลง",
+  });
+}
+
+async function confirmDanger(message, confirmText) {
+  const result = await themedSwal({
+    icon: "warning",
+    title: "ยืนยันการทำรายการ",
+    text: message,
+    showCancelButton: true,
+    confirmButtonText: confirmText,
+    cancelButtonText: "ยกเลิก",
+    confirmButtonColor: "#e0433f",
+  });
+  return result.isConfirmed;
+}
+
 // ---------- Formatting ----------
 
 const money = new Intl.NumberFormat("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -148,7 +184,7 @@ async function handleFormSubmit(e) {
     await loadBills();
     render();
   } catch (err) {
-    alert(err.message);
+    showError(err.message);
   }
 }
 
@@ -161,7 +197,7 @@ async function selectPaymentOption(billId, option, customAmount) {
     await loadBills();
     render();
   } catch (err) {
-    alert(err.message);
+    showError(err.message);
   }
 }
 
@@ -172,7 +208,7 @@ async function markPaid(billId) {
     render();
     showToast("บันทึกการจ่ายแล้ว");
   } catch (err) {
-    alert(err.message);
+    showError(err.message);
   }
 }
 
@@ -183,18 +219,19 @@ async function undoPaid(billId) {
     render();
     showToast("ยกเลิกการจ่ายล่าสุดแล้ว");
   } catch (err) {
-    alert(err.message);
+    showError(err.message);
   }
 }
 
 async function deleteBill(billId) {
-  if (!confirm("ลบรายการบิลนี้และประวัติทั้งหมดของบิลนี้?")) return;
+  const ok = await confirmDanger("ลบรายการบิลนี้และประวัติทั้งหมดของบิลนี้?", "ลบ");
+  if (!ok) return;
   try {
     await api(`/bills/${billId}`, { method: "DELETE" });
     await loadBills();
     render();
   } catch (err) {
-    alert(err.message);
+    showError(err.message);
   }
 }
 
