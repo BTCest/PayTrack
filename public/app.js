@@ -10,6 +10,7 @@ const state = {
   historyModal: null, // { billId, billName, items: [] }
   allHistory: null, // array or null
   toast: null,
+  filter: null, // null | 'unpaid' | 'overdue' | 'soon'
 };
 
 // ---------- API helper ----------
@@ -311,6 +312,13 @@ function billCardHtml(bill) {
   `;
 }
 
+function matchesFilter(bill, filter) {
+  if (!filter) return true;
+  const status = billStatus(bill).key;
+  if (filter === "unpaid") return status !== "paid";
+  return status === filter;
+}
+
 function renderDashboard() {
   const summary = summarize(state.bills);
   const sorted = [...state.bills].sort((a, b) => {
@@ -319,6 +327,8 @@ function renderDashboard() {
     if (aDone !== bDone) return aDone ? 1 : -1;
     return a.next_due_date.localeCompare(b.next_due_date);
   });
+  const filtered = sorted.filter((b) => matchesFilter(b, state.filter));
+  const filterLabel = { unpaid: "รายการค้างจ่าย", overdue: "เลยกำหนดแล้ว", soon: "ใกล้ครบกำหนด" }[state.filter];
 
   app.innerHTML = `
     <div class="topbar">
@@ -331,15 +341,15 @@ function renderDashboard() {
     </div>
     <div class="container">
       <div class="summary-row">
-        <div class="summary-card accent-neutral">
+        <div class="summary-card accent-neutral filterable ${state.filter === "unpaid" ? "active" : ""}" data-filter="unpaid">
           <div class="label">รายการค้างจ่าย</div>
           <div class="value">${summary.count}</div>
         </div>
-        <div class="summary-card accent-danger">
+        <div class="summary-card accent-danger filterable ${state.filter === "overdue" ? "active" : ""}" data-filter="overdue">
           <div class="label">เลยกำหนดแล้ว</div>
           <div class="value" style="color:var(--danger)">${summary.overdue}</div>
         </div>
-        <div class="summary-card accent-warn">
+        <div class="summary-card accent-warn filterable ${state.filter === "soon" ? "active" : ""}" data-filter="soon">
           <div class="label">ใกล้ครบกำหนด (≤5 วัน)</div>
           <div class="value" style="color:var(--warn)">${summary.soon}</div>
         </div>
@@ -350,12 +360,22 @@ function renderDashboard() {
       </div>
 
       <div class="section-head">
-        <h2>รายการบิล</h2>
-        <button class="btn btn-primary btn-sm" id="btn-add-bill">+ เพิ่มบิล</button>
+        <h2>รายการบิล${filterLabel ? ` · ${filterLabel}` : ""}</h2>
+        <div style="display:flex; gap:8px;">
+          ${state.filter ? `<button class="btn btn-ghost btn-sm" id="btn-clear-filter">ล้างตัวกรอง</button>` : ""}
+          <button class="btn btn-primary btn-sm" id="btn-add-bill">+ เพิ่มบิล</button>
+        </div>
       </div>
 
       <div class="bill-list">
-        ${sorted.length ? sorted.map(billCardHtml).join("") : `
+        ${filtered.length ? filtered.map(billCardHtml).join("") : sorted.length ? `
+        <div class="empty-state">
+          <div class="empty-icon">฿</div>
+          <h3>ไม่มีรายการที่ตรงกับตัวกรองนี้</h3>
+          <p>ลองเลือกตัวกรองอื่น หรือล้างตัวกรองเพื่อดูรายการทั้งหมด</p>
+          <button class="btn btn-primary" id="btn-clear-filter-empty">ล้างตัวกรอง</button>
+        </div>
+        ` : `
         <div class="empty-state">
           <div class="empty-icon">฿</div>
           <h3>ยังไม่มีรายการบิล</h3>
@@ -384,6 +404,18 @@ function renderDashboard() {
     });
   }
   document.getElementById("btn-history-all").addEventListener("click", openAllHistory);
+
+  document.querySelectorAll(".summary-card.filterable").forEach((card) => {
+    card.addEventListener("click", () => {
+      const key = card.dataset.filter;
+      state.filter = state.filter === key ? null : key;
+      render();
+    });
+  });
+  const btnClearFilter = document.getElementById("btn-clear-filter");
+  if (btnClearFilter) btnClearFilter.addEventListener("click", () => { state.filter = null; render(); });
+  const btnClearFilterEmpty = document.getElementById("btn-clear-filter-empty");
+  if (btnClearFilterEmpty) btnClearFilterEmpty.addEventListener("click", () => { state.filter = null; render(); });
 
   document.querySelectorAll(".bill-card").forEach((card) => {
     const billId = card.dataset.billId;
