@@ -12,6 +12,7 @@ const state = {
   toast: null,
   filter: null, // null | 'unpaid' | 'overdue' | 'soon'
   expanded: new Set(), // bill ids currently showing full detail
+  customEditing: new Set(), // bill ids currently showing the custom-amount input, unsaved
 };
 
 // ---------- API helper ----------
@@ -338,7 +339,10 @@ function billCardHtml(bill) {
         <button class="option-pill ${option === "full" ? "active" : ""}" data-action="select-option" data-option="full">จ่ายเต็มจำนวน</button>
         <button class="option-pill ${option === "min" ? "active" : ""}" data-action="select-option" data-option="min">จ่ายขั้นต่ำ</button>
         <button class="option-pill ${option === "custom" ? "active" : ""}" data-action="select-option" data-option="custom">กำหนดเอง</button>
-        ${option === "custom" ? `<input class="custom-amount-input" type="number" min="0.01" step="0.01" placeholder="จำนวนเงิน" data-role="custom-amount" value="${bill.custom_amount ?? ""}" />` : ""}
+        ${option === "custom" || state.customEditing.has(bill.id) ? `
+        <input class="custom-amount-input" type="number" min="0.01" step="0.01" placeholder="ระบุจำนวนเงิน" data-role="custom-amount" value="${bill.custom_amount ?? ""}" />
+        <button class="btn btn-primary btn-sm" data-action="confirm-custom">ยืนยัน</button>
+        ` : ""}
       </div>
       ` : ""}
 
@@ -477,24 +481,38 @@ function renderDashboard() {
       btn.addEventListener("click", () => {
         const option = btn.dataset.option;
         if (option === "custom") {
-          const input = card.querySelector('[data-role="custom-amount"]');
-          const val = input ? parseFloat(input.value) : NaN;
-          if (bill.payment_option === "custom" && !Number.isNaN(val)) {
-            selectPaymentOption(billId, "custom", val);
-          } else {
-            selectPaymentOption(billId, "custom", bill.custom_amount || bill.min_amount);
-          }
+          state.customEditing.add(billId);
+          render();
+          const el = document.querySelector(`.bill-card[data-bill-id="${billId}"] [data-role="custom-amount"]`);
+          if (el) el.focus();
         } else {
+          state.customEditing.delete(billId);
           selectPaymentOption(billId, option);
         }
       });
     });
 
+    const submitCustomAmount = () => {
+      const input = card.querySelector('[data-role="custom-amount"]');
+      const val = input ? parseFloat(input.value) : NaN;
+      if (Number.isNaN(val) || val <= 0) {
+        showError("กรุณาระบุจำนวนเงินที่มากกว่า 0");
+        return;
+      }
+      state.customEditing.delete(billId);
+      selectPaymentOption(billId, "custom", val);
+    };
+
+    const confirmCustomBtn = card.querySelector('[data-action="confirm-custom"]');
+    if (confirmCustomBtn) confirmCustomBtn.addEventListener("click", submitCustomAmount);
+
     const customInput = card.querySelector('[data-role="custom-amount"]');
     if (customInput) {
-      customInput.addEventListener("change", () => {
-        const val = parseFloat(customInput.value);
-        if (!Number.isNaN(val) && val > 0) selectPaymentOption(billId, "custom", val);
+      customInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          submitCustomAmount();
+        }
       });
     }
 
