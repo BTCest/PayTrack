@@ -1,0 +1,11 @@
+name = "bill-tracker"
+compatibility_date = "2024-11-01"
+pages_build_output_dir = "public"
+
+# ใช้สำหรับ `wrangler pages dev` ตอนพัฒนาในเครื่อง (ต้องมี Node.js/npm ติดตั้งก่อน)
+# database_id ด้านล่างต้องแทนที่ด้วยค่าจริงหลังสร้าง D1 database
+# (สร้างได้ทั้งจาก dash.cloudflare.com หรือคำสั่ง `wrangler d1 create bill-tracker-db`)
+[[d1_databases]]
+binding = "DB"
+database_name = "bill-tracker-db"
+database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"

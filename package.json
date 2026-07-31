@@ -1,0 +1,9 @@
+{
+  "name": "bill-tracker",
+  "private": true,
+  "version": "1.0.0",
+  "description": "ระบบติดตามรายการบิลที่ต้องจ่าย (Cloudflare Pages + D1)",
+  "dependencies": {
+    "hono": "^4.6.14"
+  }
+}
