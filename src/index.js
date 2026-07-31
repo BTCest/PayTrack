@@ -123,8 +123,8 @@ app.post("/bills", async (c) => {
   if (!name || typeof full_amount !== "number" || typeof min_amount !== "number" || !next_due_date) {
     return c.json({ error: "กรอกข้อมูลให้ครบ: ชื่อ, ยอดเต็ม, ยอดขั้นต่ำ, วันครบกำหนด" }, 400);
   }
-  if (full_amount <= 0 || min_amount <= 0 || min_amount > full_amount) {
-    return c.json({ error: "ยอดขั้นต่ำต้องมากกว่า 0 และไม่เกินยอดเต็ม" }, 400);
+  if (full_amount < 0 || min_amount < 0 || min_amount > full_amount) {
+    return c.json({ error: "ยอดขั้นต่ำต้องไม่ติดลบ และไม่เกินยอดเต็ม" }, 400);
   }
 
   const dueDay = new Date(next_due_date + "T00:00:00Z").getUTCDate();
@@ -155,8 +155,8 @@ app.put("/bills/:id", async (c) => {
   const next_due_date = body.next_due_date ?? existing.next_due_date;
   const recurrence = body.recurrence === "once" || body.recurrence === "monthly" ? body.recurrence : existing.recurrence;
 
-  if (full_amount <= 0 || min_amount <= 0 || min_amount > full_amount) {
-    return c.json({ error: "ยอดขั้นต่ำต้องมากกว่า 0 และไม่เกินยอดเต็ม" }, 400);
+  if (full_amount < 0 || min_amount < 0 || min_amount > full_amount) {
+    return c.json({ error: "ยอดขั้นต่ำต้องไม่ติดลบ และไม่เกินยอดเต็ม" }, 400);
   }
 
   const dueDay = new Date(next_due_date + "T00:00:00Z").getUTCDate();

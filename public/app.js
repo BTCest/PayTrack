@@ -445,11 +445,11 @@ function formModalHtml() {
           </div>
           <div class="field">
             <label>ยอดเต็ม (บาท)</label>
-            <input name="full_amount" type="number" min="0.01" step="0.01" required value="${isEdit ? bill.full_amount : ""}" />
+            <input name="full_amount" type="number" min="0" step="0.01" required value="${isEdit ? bill.full_amount : ""}" />
           </div>
           <div class="field">
             <label>ยอดขั้นต่ำ (บาท)</label>
-            <input name="min_amount" type="number" min="0.01" step="0.01" required value="${isEdit ? bill.min_amount : ""}" />
+            <input name="min_amount" type="number" min="0" step="0.01" required value="${isEdit ? bill.min_amount : ""}" />
           </div>
           <div class="field">
             <label>วันครบกำหนดชำระ (รอบปัจจุบัน)</label>
