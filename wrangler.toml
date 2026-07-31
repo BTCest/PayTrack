@@ -11,4 +11,4 @@ directory = "public"
 [[d1_databases]]
 binding = "DB"
 database_name = "paytrack-db"
-database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+database_id = "82464f02-68f9-4eca-a49f-a09f0d6b13f6"
