@@ -161,9 +161,16 @@ async function loadLoans() {
 }
 
 async function switchView(view) {
+  const previousView = state.view;
   state.view = view;
   if (view === "loans" && !state.loansLoaded) {
-    await loadLoans();
+    try {
+      await loadLoans();
+    } catch (err) {
+      state.view = previousView;
+      showError(err.message);
+      return;
+    }
   }
   render();
 }
