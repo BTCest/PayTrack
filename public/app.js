@@ -2,17 +2,23 @@ const app = document.getElementById("app");
 
 const state = {
   user: null,
+  view: "bills", // 'bills' | 'loans'
   bills: [],
+  loans: [],
   authMode: "login", // 'login' | 'register'
   authError: null,
   busy: false,
   formModal: null, // { mode: 'create'|'edit', bill?: {...} }
+  loanFormModal: null, // { mode: 'create'|'edit', loan?: {...} }
   historyModal: null, // { billId, billName, items: [] }
   allHistory: null, // array or null
   toast: null,
   filter: null, // null | 'unpaid' | 'overdue' | 'soon'
+  loanFilter: null, // null | 'lend' | 'borrow' | 'overdue'
   expanded: new Set(), // bill ids currently showing full detail
+  loanExpanded: new Set(), // loan ids currently showing full detail
   customEditing: new Set(), // bill ids currently showing the custom-amount input, unsaved
+  loansLoaded: false,
 };
 
 // ---------- API helper ----------
@@ -117,6 +123,19 @@ function billStatus(bill) {
   return { key: "upcoming", label: fmtDate(bill.next_due_date) };
 }
 
+function loanStatus(loan) {
+  if (loan.is_returned) {
+    return { key: "returned", label: "คืนแล้ว" };
+  }
+  if (!loan.due_date) {
+    return { key: "pending", label: "ยังไม่คืน" };
+  }
+  const diff = daysUntil(loan.due_date);
+  if (diff < 0) return { key: "overdue", label: `เลยกำหนดคืน ${Math.abs(diff)} วัน` };
+  if (diff <= 5) return { key: "soon", label: diff === 0 ? "ครบกำหนดคืนวันนี้" : `อีก ${diff} วัน` };
+  return { key: "pending", label: `นัดคืน ${fmtDate(loan.due_date)}` };
+}
+
 // ---------- Init ----------
 
 async function init() {
@@ -133,6 +152,20 @@ async function init() {
 async function loadBills() {
   const { bills } = await api("/bills");
   state.bills = bills;
+}
+
+async function loadLoans() {
+  const { loans } = await api("/loans");
+  state.loans = loans;
+  state.loansLoaded = true;
+}
+
+async function switchView(view) {
+  state.view = view;
+  if (view === "loans" && !state.loansLoaded) {
+    await loadLoans();
+  }
+  render();
 }
 
 // ---------- Actions ----------
@@ -162,6 +195,9 @@ async function handleLogout() {
   await api("/auth/logout", { method: "POST" });
   state.user = null;
   state.bills = [];
+  state.loans = [];
+  state.loansLoaded = false;
+  state.view = "bills";
   render();
 }
 
@@ -231,6 +267,67 @@ async function deleteBill(billId) {
   try {
     await api(`/bills/${billId}`, { method: "DELETE" });
     await loadBills();
+    render();
+  } catch (err) {
+    showError(err.message);
+  }
+}
+
+// ---------- Actions: ยืม/คืน ----------
+
+async function handleLoanFormSubmit(e) {
+  e.preventDefault();
+  const form = e.target;
+  const payload = {
+    person_name: form.person_name.value.trim(),
+    direction: form.direction.value,
+    amount: parseFloat(form.amount.value),
+    note: form.note.value.trim(),
+    borrowed_date: form.borrowed_date.value,
+    due_date: form.due_date.value || null,
+  };
+  try {
+    if (state.loanFormModal.mode === "edit") {
+      await api(`/loans/${state.loanFormModal.loan.id}`, { method: "PUT", body: payload });
+    } else {
+      await api("/loans", { method: "POST", body: payload });
+    }
+    state.loanFormModal = null;
+    await loadLoans();
+    render();
+  } catch (err) {
+    showError(err.message);
+  }
+}
+
+async function markReturned(loanId) {
+  try {
+    await api(`/loans/${loanId}/return`, { method: "POST" });
+    await loadLoans();
+    render();
+    showToast("บันทึกว่าคืนแล้ว");
+  } catch (err) {
+    showError(err.message);
+  }
+}
+
+async function undoReturn(loanId) {
+  try {
+    await api(`/loans/${loanId}/undo-return`, { method: "POST" });
+    await loadLoans();
+    render();
+    showToast("ยกเลิกการคืนล่าสุดแล้ว");
+  } catch (err) {
+    showError(err.message);
+  }
+}
+
+async function deleteLoan(loanId) {
+  const ok = await confirmDanger("ลบรายการยืม/คืนนี้?", "ลบ");
+  if (!ok) return;
+  try {
+    await api(`/loans/${loanId}`, { method: "DELETE" });
+    await loadLoans();
     render();
   } catch (err) {
     showError(err.message);
@@ -370,6 +467,90 @@ function matchesFilter(bill, filter) {
   return status === filter;
 }
 
+function matchesLoanFilter(loan, filter) {
+  if (!filter) return true;
+  if (filter === "lend") return loan.direction === "lend";
+  if (filter === "borrow") return loan.direction === "borrow";
+  if (filter === "overdue") return loanStatus(loan).key === "overdue";
+  return true;
+}
+
+function loanCardHtml(loan) {
+  const status = loanStatus(loan);
+  const isExpanded = state.loanExpanded.has(loan.id);
+  const directionLabel = loan.direction === "lend" ? "ให้ยืม" : "ยืมมา";
+  return `
+    <div class="bill-card loan-card status-${status.key} ${status.key === "returned" ? "paid" : ""} ${isExpanded ? "expanded" : "compact"}" data-loan-id="${loan.id}">
+      <div class="bill-top" data-action="toggle-expand">
+        <div>
+          <div class="bill-name">
+            <span class="direction-tag direction-${loan.direction}">${directionLabel}</span>
+            ${escapeHtml(loan.person_name)}
+          </div>
+          <div class="bill-due">ยืมเมื่อ ${fmtDate(loan.borrowed_date)}${!isExpanded ? ` · ${fmtMoney(loan.amount)}` : ""}</div>
+        </div>
+        <div class="bill-top-right">
+          <span class="badge badge-${status.key}">${status.label}</span>
+          <span class="chevron">›</span>
+        </div>
+      </div>
+
+      ${isExpanded ? `
+      <div class="amounts">
+        <div class="amount-block">
+          <div class="label">จำนวนเงิน</div>
+          <div class="value">${fmtMoney(loan.amount)}</div>
+        </div>
+        ${loan.due_date ? `
+        <div class="amount-block">
+          <div class="label">นัดคืน</div>
+          <div class="value">${fmtDate(loan.due_date)}</div>
+        </div>
+        ` : ""}
+      </div>
+      ${loan.note ? `<p style="color:var(--text-muted); font-size:0.85rem; margin: 0 0 14px;">${escapeHtml(loan.note)}</p>` : ""}
+
+      <div class="bill-actions">
+        <div class="left">
+          ${!loan.is_returned ? `<button class="btn btn-primary btn-sm" data-action="return">ทำเครื่องหมายว่าคืนแล้ว</button>` : `<button class="btn btn-outline btn-sm" data-action="undo-return">ยกเลิกการคืน</button>`}
+        </div>
+        <div class="right">
+          <button class="btn btn-ghost btn-sm" data-action="edit">แก้ไข</button>
+          <button class="btn btn-danger btn-sm" data-action="delete">ลบ</button>
+        </div>
+      </div>
+      ` : ""}
+    </div>
+  `;
+}
+
+function topbarHtml() {
+  return `
+    <div class="topbar">
+      <div class="topbar-left">
+        <h1>ตัวจัดการบิลที่ต้องจ่าย</h1>
+        <div class="tab-switch">
+          <button class="tab-btn ${state.view === "bills" ? "active" : ""}" data-view="bills">บิล</button>
+          <button class="tab-btn ${state.view === "loans" ? "active" : ""}" data-view="loans">ยืม/คืน</button>
+        </div>
+      </div>
+      <div class="topbar-right">
+        <span class="who">${escapeHtml(state.user.email)}</span>
+        <button class="btn btn-ghost btn-sm" id="btn-history-all">ประวัติทั้งหมด</button>
+        <button class="btn btn-outline btn-sm" id="btn-logout">ออกจากระบบ</button>
+      </div>
+    </div>
+  `;
+}
+
+function bindTopbarHandlers() {
+  document.getElementById("btn-logout").addEventListener("click", handleLogout);
+  document.getElementById("btn-history-all").addEventListener("click", openAllHistory);
+  document.querySelectorAll(".tab-btn").forEach((btn) => {
+    btn.addEventListener("click", () => switchView(btn.dataset.view));
+  });
+}
+
 function renderDashboard() {
   const summary = summarize(state.bills);
   const sorted = [...state.bills].sort((a, b) => {
@@ -382,14 +563,7 @@ function renderDashboard() {
   const filterLabel = { unpaid: "รายการค้างจ่าย", overdue: "เลยกำหนดแล้ว", soon: "ใกล้ครบกำหนด" }[state.filter];
 
   app.innerHTML = `
-    <div class="topbar">
-      <h1>ตัวจัดการบิลที่ต้องจ่าย</h1>
-      <div class="topbar-right">
-        <span class="who">${escapeHtml(state.user.email)}</span>
-        <button class="btn btn-ghost btn-sm" id="btn-history-all">ประวัติทั้งหมด</button>
-        <button class="btn btn-outline btn-sm" id="btn-logout">ออกจากระบบ</button>
-      </div>
-    </div>
+    ${topbarHtml()}
     <div class="container">
       <div class="summary-row">
         <div class="summary-card accent-neutral filterable ${state.filter === "unpaid" ? "active" : ""}" data-filter="unpaid">
@@ -442,7 +616,7 @@ function renderDashboard() {
     ${state.toast ? `<div class="toast">${escapeHtml(state.toast)}</div>` : ""}
   `;
 
-  document.getElementById("btn-logout").addEventListener("click", handleLogout);
+  bindTopbarHandlers();
   document.getElementById("btn-add-bill").addEventListener("click", () => {
     state.formModal = { mode: "create" };
     render();
@@ -454,7 +628,6 @@ function renderDashboard() {
       render();
     });
   }
-  document.getElementById("btn-history-all").addEventListener("click", openAllHistory);
 
   document.querySelectorAll(".summary-card.filterable").forEach((card) => {
     card.addEventListener("click", () => {
@@ -539,6 +712,131 @@ function renderDashboard() {
   bindModalCloseHandlers();
 }
 
+function summarizeLoans(loans) {
+  const outstanding = loans.filter((l) => !l.is_returned);
+  const lendTotal = outstanding
+    .filter((l) => l.direction === "lend")
+    .reduce((sum, l) => sum + Number(l.amount || 0), 0);
+  const borrowTotal = outstanding
+    .filter((l) => l.direction === "borrow")
+    .reduce((sum, l) => sum + Number(l.amount || 0), 0);
+  const overdue = outstanding.filter((l) => loanStatus(l).key === "overdue").length;
+  return { lendTotal, borrowTotal, overdue, count: outstanding.length };
+}
+
+function renderLoansView() {
+  const summary = summarizeLoans(state.loans);
+  const sorted = [...state.loans].sort((a, b) => {
+    if (a.is_returned !== b.is_returned) return a.is_returned ? 1 : -1;
+    const ad = a.due_date || "9999-99-99";
+    const bd = b.due_date || "9999-99-99";
+    return ad.localeCompare(bd);
+  });
+  const filtered = sorted.filter((l) => matchesLoanFilter(l, state.loanFilter));
+  const filterLabel = { lend: "ให้ยืม", borrow: "ยืมมา", overdue: "เลยกำหนดคืน" }[state.loanFilter];
+
+  app.innerHTML = `
+    ${topbarHtml()}
+    <div class="container">
+      <div class="summary-row">
+        <div class="summary-card accent-ok filterable ${state.loanFilter === "lend" ? "active" : ""}" data-loan-filter="lend">
+          <div class="label">ให้คนอื่นยืม (ค้างคืน)</div>
+          <div class="value" style="color:var(--ok)">${fmtMoney(summary.lendTotal)}</div>
+        </div>
+        <div class="summary-card accent-danger filterable ${state.loanFilter === "borrow" ? "active" : ""}" data-loan-filter="borrow">
+          <div class="label">ยืมคนอื่น (ค้างคืน)</div>
+          <div class="value" style="color:var(--danger)">${fmtMoney(summary.borrowTotal)}</div>
+        </div>
+        <div class="summary-card accent-warn filterable ${state.loanFilter === "overdue" ? "active" : ""}" data-loan-filter="overdue">
+          <div class="label">เลยกำหนดคืนแล้ว</div>
+          <div class="value" style="color:var(--warn)">${summary.overdue}</div>
+        </div>
+      </div>
+
+      <div class="section-head">
+        <h2>รายการยืม/คืน${filterLabel ? ` · ${filterLabel}` : ""}</h2>
+        <div style="display:flex; gap:8px;">
+          ${state.loanFilter ? `<button class="btn btn-ghost btn-sm" id="btn-clear-loan-filter">ล้างตัวกรอง</button>` : ""}
+          <button class="btn btn-primary btn-sm" id="btn-add-loan">+ เพิ่มรายการ</button>
+        </div>
+      </div>
+
+      <div class="bill-list">
+        ${filtered.length ? filtered.map(loanCardHtml).join("") : sorted.length ? `
+        <div class="empty-state">
+          <div class="empty-icon">฿</div>
+          <h3>ไม่มีรายการที่ตรงกับตัวกรองนี้</h3>
+          <p>ลองเลือกตัวกรองอื่น หรือล้างตัวกรองเพื่อดูรายการทั้งหมด</p>
+          <button class="btn btn-primary" id="btn-clear-loan-filter-empty">ล้างตัวกรอง</button>
+        </div>
+        ` : `
+        <div class="empty-state">
+          <div class="empty-icon">฿</div>
+          <h3>ยังไม่มีรายการยืม/คืน</h3>
+          <p>บันทึกเงินที่ให้คนอื่นยืม หรือเงินที่คุณยืมคนอื่นมา จะได้ไม่ลืมทวงหรือลืมคืน</p>
+          <button class="btn btn-primary" id="btn-add-loan-empty">+ เพิ่มรายการแรก</button>
+        </div>
+        `}
+      </div>
+    </div>
+    ${state.loanFormModal ? loanFormModalHtml() : ""}
+    ${state.toast ? `<div class="toast">${escapeHtml(state.toast)}</div>` : ""}
+  `;
+
+  bindTopbarHandlers();
+  document.getElementById("btn-add-loan").addEventListener("click", () => {
+    state.loanFormModal = { mode: "create" };
+    render();
+  });
+  const btnAddLoanEmpty = document.getElementById("btn-add-loan-empty");
+  if (btnAddLoanEmpty) {
+    btnAddLoanEmpty.addEventListener("click", () => {
+      state.loanFormModal = { mode: "create" };
+      render();
+    });
+  }
+
+  document.querySelectorAll(".summary-card.filterable[data-loan-filter]").forEach((card) => {
+    card.addEventListener("click", () => {
+      const key = card.dataset.loanFilter;
+      state.loanFilter = state.loanFilter === key ? null : key;
+      render();
+    });
+  });
+  const btnClearLoanFilter = document.getElementById("btn-clear-loan-filter");
+  if (btnClearLoanFilter) btnClearLoanFilter.addEventListener("click", () => { state.loanFilter = null; render(); });
+  const btnClearLoanFilterEmpty = document.getElementById("btn-clear-loan-filter-empty");
+  if (btnClearLoanFilterEmpty) btnClearLoanFilterEmpty.addEventListener("click", () => { state.loanFilter = null; render(); });
+
+  document.querySelectorAll(".loan-card").forEach((card) => {
+    const loanId = card.dataset.loanId;
+    const loan = state.loans.find((l) => l.id === loanId);
+
+    card.querySelector('[data-action="toggle-expand"]').addEventListener("click", () => {
+      if (state.loanExpanded.has(loanId)) state.loanExpanded.delete(loanId);
+      else state.loanExpanded.add(loanId);
+      render();
+    });
+
+    const returnBtn = card.querySelector('[data-action="return"]');
+    if (returnBtn) returnBtn.addEventListener("click", () => markReturned(loanId));
+
+    const undoReturnBtn = card.querySelector('[data-action="undo-return"]');
+    if (undoReturnBtn) undoReturnBtn.addEventListener("click", () => undoReturn(loanId));
+
+    const editBtn = card.querySelector('[data-action="edit"]');
+    if (editBtn) editBtn.addEventListener("click", () => {
+      state.loanFormModal = { mode: "edit", loan };
+      render();
+    });
+
+    const deleteBtn = card.querySelector('[data-action="delete"]');
+    if (deleteBtn) deleteBtn.addEventListener("click", () => deleteLoan(loanId));
+  });
+
+  bindModalCloseHandlers();
+}
+
 // ---------- Modals ----------
 
 function formModalHtml() {
@@ -575,6 +873,51 @@ function formModalHtml() {
           <div class="modal-actions">
             <button type="button" class="btn btn-ghost" data-close="form">ยกเลิก</button>
             <button type="submit" class="btn btn-primary">${isEdit ? "บันทึก" : "เพิ่มบิล"}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `;
+}
+
+function loanFormModalHtml() {
+  const { mode, loan } = state.loanFormModal;
+  const isEdit = mode === "edit";
+  return `
+    <div class="modal-backdrop" data-close="loanForm">
+      <div class="modal" data-stop>
+        <h2>${isEdit ? "แก้ไขรายการยืม/คืน" : "เพิ่มรายการยืม/คืน"}</h2>
+        <form id="loan-form">
+          <div class="field">
+            <label>ทิศทาง</label>
+            <div class="radio-row">
+              <label><input type="radio" name="direction" value="lend" ${!isEdit || loan.direction === "lend" ? "checked" : ""} /> ให้คนอื่นยืม</label>
+              <label><input type="radio" name="direction" value="borrow" ${isEdit && loan.direction === "borrow" ? "checked" : ""} /> ยืมคนอื่นมา</label>
+            </div>
+          </div>
+          <div class="field">
+            <label>ชื่อคน</label>
+            <input name="person_name" required value="${isEdit ? escapeHtml(loan.person_name) : ""}" placeholder="เช่น เพื่อนต้น" />
+          </div>
+          <div class="field">
+            <label>จำนวนเงิน (บาท)</label>
+            <input name="amount" type="number" min="0.01" step="0.01" required value="${isEdit ? loan.amount : ""}" />
+          </div>
+          <div class="field">
+            <label>วันที่ยืม</label>
+            <input name="borrowed_date" type="date" required value="${isEdit ? loan.borrowed_date : todayStr()}" />
+          </div>
+          <div class="field">
+            <label>นัดคืนวันที่ (ถ้ามี)</label>
+            <input name="due_date" type="date" value="${isEdit && loan.due_date ? loan.due_date : ""}" />
+          </div>
+          <div class="field">
+            <label>โน้ต (ถ้ามี)</label>
+            <input name="note" value="${isEdit && loan.note ? escapeHtml(loan.note) : ""}" placeholder="เช่น ยืมค่าไปกินข้าว" />
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="btn btn-ghost" data-close="loanForm">ยกเลิก</button>
+            <button type="submit" class="btn btn-primary">${isEdit ? "บันทึก" : "เพิ่มรายการ"}</button>
           </div>
         </form>
       </div>
@@ -639,6 +982,7 @@ function bindModalCloseHandlers() {
       if (e.target !== el) return;
       const key = el.dataset.close;
       if (key === "form") state.formModal = null;
+      if (key === "loanForm") state.loanFormModal = null;
       if (key === "history") state.historyModal = null;
       if (key === "allHistory") state.allHistory = null;
       render();
@@ -646,6 +990,8 @@ function bindModalCloseHandlers() {
   });
   const form = document.getElementById("bill-form");
   if (form) form.addEventListener("submit", handleFormSubmit);
+  const loanForm = document.getElementById("loan-form");
+  if (loanForm) loanForm.addEventListener("submit", handleLoanFormSubmit);
 }
 
 function escapeHtml(str) {
@@ -657,6 +1003,8 @@ function escapeHtml(str) {
 function render() {
   if (!state.user) {
     renderAuth();
+  } else if (state.view === "loans") {
+    renderLoansView();
   } else {
     renderDashboard();
   }

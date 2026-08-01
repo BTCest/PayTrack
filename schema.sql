@@ -39,7 +39,23 @@ CREATE TABLE IF NOT EXISTS payment_history (
   paid_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS loans (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  person_name TEXT NOT NULL,
+  direction TEXT NOT NULL,
+  amount REAL NOT NULL,
+  note TEXT,
+  borrowed_date TEXT NOT NULL,
+  due_date TEXT,
+  is_returned INTEGER NOT NULL DEFAULT 0,
+  returned_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE INDEX IF NOT EXISTS idx_bills_user ON bills(user_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_history_bill ON payment_history(bill_id);
 CREATE INDEX IF NOT EXISTS idx_history_user ON payment_history(user_id);
+CREATE INDEX IF NOT EXISTS idx_loans_user ON loans(user_id);

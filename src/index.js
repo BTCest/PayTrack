@@ -102,6 +102,13 @@ app.use("/history", async (c, next) => {
   await next();
 });
 
+app.use("/loans/*", async (c, next) => {
+  const user = await currentUser(c);
+  if (!user) return c.json({ error: "unauthorized" }, 401);
+  c.set("user", user);
+  await next();
+});
+
 // ---------- Bills ----------
 
 app.get("/bills", async (c) => {
@@ -293,6 +300,124 @@ app.get("/bills/:id/history", async (c) => {
     .bind(id)
     .all();
   return c.json({ history: results });
+});
+
+// ---------- ยืม/คืน ----------
+
+const LOAN_DIRECTIONS = ["lend", "borrow"];
+
+app.get("/loans", async (c) => {
+  const user = c.get("user");
+  const { results } = await c.env.DB.prepare(
+    "SELECT * FROM loans WHERE user_id = ? ORDER BY is_returned ASC, (due_date IS NULL), due_date ASC, borrowed_date DESC"
+  )
+    .bind(user.id)
+    .all();
+  return c.json({ loans: results });
+});
+
+app.post("/loans", async (c) => {
+  const user = c.get("user");
+  const body = await c.req.json().catch(() => ({}));
+  const person_name = (body.person_name || "").trim();
+  const direction = body.direction;
+  const amount = body.amount;
+  const note = (body.note || "").trim() || null;
+  const borrowed_date = body.borrowed_date;
+  const due_date = body.due_date || null;
+
+  if (!person_name || !LOAN_DIRECTIONS.includes(direction) || typeof amount !== "number" || !borrowed_date) {
+    return c.json({ error: "กรอกข้อมูลให้ครบ: ชื่อ, ทิศทาง, จำนวนเงิน, วันที่ยืม" }, 400);
+  }
+  if (amount <= 0) {
+    return c.json({ error: "จำนวนเงินต้องมากกว่า 0" }, 400);
+  }
+
+  const id = crypto.randomUUID();
+  await c.env.DB.prepare(
+    `INSERT INTO loans (id, user_id, person_name, direction, amount, note, borrowed_date, due_date)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+  )
+    .bind(id, user.id, person_name, direction, amount, note, borrowed_date, due_date)
+    .run();
+
+  const loan = await c.env.DB.prepare("SELECT * FROM loans WHERE id = ?").bind(id).first();
+  return c.json({ loan }, 201);
+});
+
+app.put("/loans/:id", async (c) => {
+  const user = c.get("user");
+  const id = c.req.param("id");
+  const existing = await c.env.DB.prepare("SELECT * FROM loans WHERE id = ? AND user_id = ?")
+    .bind(id, user.id)
+    .first();
+  if (!existing) return c.json({ error: "not found" }, 404);
+
+  const body = await c.req.json().catch(() => ({}));
+  const person_name = body.person_name !== undefined ? String(body.person_name).trim() : existing.person_name;
+  const direction = LOAN_DIRECTIONS.includes(body.direction) ? body.direction : existing.direction;
+  const amount = typeof body.amount === "number" ? body.amount : existing.amount;
+  const note = body.note !== undefined ? (String(body.note).trim() || null) : existing.note;
+  const borrowed_date = body.borrowed_date || existing.borrowed_date;
+  const due_date = body.due_date !== undefined ? (body.due_date || null) : existing.due_date;
+
+  if (!person_name || amount <= 0) {
+    return c.json({ error: "กรอกข้อมูลให้ครบและจำนวนเงินต้องมากกว่า 0" }, 400);
+  }
+
+  await c.env.DB.prepare(
+    `UPDATE loans SET person_name=?, direction=?, amount=?, note=?, borrowed_date=?, due_date=?, updated_at=datetime('now')
+     WHERE id=?`
+  )
+    .bind(person_name, direction, amount, note, borrowed_date, due_date, id)
+    .run();
+
+  const loan = await c.env.DB.prepare("SELECT * FROM loans WHERE id = ?").bind(id).first();
+  return c.json({ loan });
+});
+
+app.delete("/loans/:id", async (c) => {
+  const user = c.get("user");
+  const id = c.req.param("id");
+  const result = await c.env.DB.prepare("DELETE FROM loans WHERE id = ? AND user_id = ?").bind(id, user.id).run();
+  if (!result.meta.changes) return c.json({ error: "not found" }, 404);
+  return c.json({ ok: true });
+});
+
+app.post("/loans/:id/return", async (c) => {
+  const user = c.get("user");
+  const id = c.req.param("id");
+  const existing = await c.env.DB.prepare("SELECT id FROM loans WHERE id = ? AND user_id = ?")
+    .bind(id, user.id)
+    .first();
+  if (!existing) return c.json({ error: "not found" }, 404);
+
+  await c.env.DB.prepare(
+    `UPDATE loans SET is_returned=1, returned_at=datetime('now'), updated_at=datetime('now') WHERE id=?`
+  )
+    .bind(id)
+    .run();
+
+  const loan = await c.env.DB.prepare("SELECT * FROM loans WHERE id = ?").bind(id).first();
+  return c.json({ loan });
+});
+
+app.post("/loans/:id/undo-return", async (c) => {
+  const user = c.get("user");
+  const id = c.req.param("id");
+  const existing = await c.env.DB.prepare("SELECT id FROM loans WHERE id = ? AND user_id = ?")
+    .bind(id, user.id)
+    .first();
+  if (!existing) return c.json({ error: "not found" }, 404);
+
+  await c.env.DB.prepare(
+    `UPDATE loans SET is_returned=0, returned_at=NULL, updated_at=datetime('now') WHERE id=?`
+  )
+    .bind(id)
+    .run();
+
+  const loan = await c.env.DB.prepare("SELECT * FROM loans WHERE id = ?").bind(id).first();
+  return c.json({ loan });
 });
 
 // ---------- History (รวมทุกบิล) ----------
